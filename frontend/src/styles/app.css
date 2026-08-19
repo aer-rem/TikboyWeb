@@ -33,8 +33,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .dashboard .sidebar-bottom { box-shadow: 0 -7px 20px rgba(21, 39, 64, .035); }
 .dashboard .logout:hover { background: #fff2f3; color: var(--tikboy-red); }
 .dashboard .topbar { box-shadow: 0 3px 12px rgba(24, 40, 60, .045) !important; }
-.dashboard .search { background: #fbfcfe; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.dashboard .search { background: #fff !important; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.dashboard .search input { background: #fff !important; }
 .dashboard .search:focus-within { border-color: #e98b96; box-shadow: 0 0 0 4px rgba(220, 48, 66, .09); }
+.dashboard .icon-button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: #27364d !important; }
+.dashboard .icon-button .v-icon { color: #27364d !important; opacity: 1 !important; }
+.dashboard .icon-button:hover { border-color: #e4e8ee; background: #f5f7fa; color: #071d3d !important; box-shadow: 0 3px 8px rgba(24, 41, 64, .08); }
+.dashboard .icon-button:hover .v-icon { color: #071d3d !important; }
 .dashboard .outline-button:hover, .dashboard .filter-button:hover, .dashboard .restock:hover { border-color: #e98b96; background: #fff7f8; color: var(--tikboy-red); }
 
 .dashboard .panel, .dashboard .stat-card, .dashboard .product-card, .dashboard .customer-panel,

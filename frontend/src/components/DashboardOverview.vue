@@ -21,7 +21,7 @@
         <div><h1>{{ pageTitle }}</h1><p>Sunday, August 2, 2026</p></div>
         <div class="top-actions">
           <label class="search"><v-icon icon="mdi-magnify" /><input v-model="search" placeholder="Search..." /></label>
-          <button class="icon-button"><v-icon icon="mdi-bell-outline" /><i>2</i></button>
+          <button aria-label="Notifications" class="icon-button" @click="notify('No new notifications')"><v-icon icon="mdi-bell" size="24" /></button>
           <button class="outline-button" @click="notify('Export started')"><v-icon icon="mdi-download" /> Export</button>
           <button class="outline-button">Mar 2025 <v-icon icon="mdi-chevron-down" /></button>
         </div>
