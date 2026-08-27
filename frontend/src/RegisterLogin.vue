@@ -5,6 +5,10 @@
     <DashboardOverview v-if="dashboardOpen" @logout="dashboardOpen = false" />
     <v-main v-else class="admin-access">
       <section class="access-page">
+        <div class="brand-logo-wrapper">
+          <img src="@/assets/TBLOGO.png" alt="Tikboy Longganisa Logo" class="brand-logo" />
+        </div>
+
         <v-card class="access-card" elevation="0">
           <div class="shield-badge">
             <v-icon icon="mdi-shield-outline" size="38" />
