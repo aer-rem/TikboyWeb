@@ -185,6 +185,7 @@
 </script>
 
 <style scoped>
+  .brand-logo {max-width: 300px; width: 100%; height: auto; object-fit: contain;}
   .admin-access { min-height: 100vh; background: #f5f6f8; color: #102847; font-family: Roboto, sans-serif; }
   .access-page { width: min(100% - 48px, 560px); margin: 40px auto 24px; text-align: center; }
   .access-card { padding: 40px 40px 39px; border-radius: 20px; background: #fff; box-shadow: 0 14px 20px rgba(16, 40, 71, .13) !important; text-align: left; }
