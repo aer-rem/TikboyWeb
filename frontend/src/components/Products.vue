@@ -60,30 +60,36 @@
           <v-icon icon="mdi-cube-outline" size="70" />
         </div>
 
-        <h2>{{ product.name }}</h2>
+        <h2>{{ product.Name }}</h2>
 
         <p class="category">
-          {{ product.category || 'Uncategorized' }}
+          {{ product.Category || 'Uncategorized' }}
         </p>
 
         <p class="description">
-          {{ product.description || 'No description added yet.' }}
+          {{ product.Description || 'No description added yet.' }}
         </p>
+
+        <div class="rating">
+          <span>★★★★</span>
+          <i>☆</i>
+          <small>(4.5)</small>
+        </div>
 
         <div class="metrics">
           <div>
             <span>Price</span>
-            <strong>{{ formatPrice(product.price) }}</strong>
+            <strong>{{ formatPrice(product.Price) }}</strong>
           </div>
 
           <div>
             <span>Stock</span>
-            <b>{{ product.stock }}</b>
+            <b>{{ product.Stock }}</b>
           </div>
         </div>
 
         <p :class="['stock', isLowStock(product) ? 'low' : '']">
-          {{ product.stock }} in stock
+          {{ product.Stock }} in stock
         </p>
 
         <div class="card-actions">
@@ -112,7 +118,7 @@
         <v-card-text>
           <v-form @submit.prevent="addProduct">
             <v-text-field
-              v-model="newProduct.name"
+              v-model="newProduct.Name"
               label="Product Name"
               placeholder="Example: TIKBOY Longganisa"
               variant="outlined"
@@ -121,7 +127,7 @@
             />
 
             <v-text-field
-              v-model="newProduct.category"
+              v-model="newProduct.Category"
               label="Category"
               placeholder="Example: Classic"
               variant="outlined"
@@ -129,7 +135,7 @@
             />
 
             <v-textarea
-              v-model="newProduct.description"
+              v-model="newProduct.Description"
               label="Description"
               placeholder="Describe the product"
               variant="outlined"
@@ -138,7 +144,7 @@
             />
 
             <v-text-field
-              v-model="newProduct.price"
+              v-model="newProduct.Price"
               label="Price"
               type="number"
               prefix="₱"
@@ -150,7 +156,7 @@
             />
 
             <v-text-field
-              v-model="newProduct.stock"
+              v-model="newProduct.Stock"
               label="Stock Quantity"
               type="number"
               min="0"
@@ -190,11 +196,11 @@ import { computed, onMounted, ref } from 'vue'
 
 type Product = {
   id: string | number
-  name: string
-  category?: string | null
-  description?: string | null
-  price: string | number
-  stock: string | number
+  Name: string
+  Category?: string | null
+  Description?: string | null
+  Price: string | number
+  Stock: string | number
 }
 
 type DirectusErrorResponse = {
@@ -209,6 +215,13 @@ type DirectusListResponse = DirectusErrorResponse & {
 
 type DirectusCreateResponse = DirectusErrorResponse & {
   data?: Product
+}
+
+type DirectusRefreshResponse = DirectusErrorResponse & {
+  data?: {
+    access_token: string
+    refresh_token: string
+  }
 }
 
 const props = defineProps<{
@@ -230,27 +243,96 @@ const saving = ref(false)
 const products = ref<Product[]>([])
 
 const newProduct = ref({
-  name: '',
-  category: '',
-  description: '',
-  price: '',
-  stock: '0',
+  Name: '',
+  Category: '',
+  Description: '',
+  Price: '',
+  Stock: '0',
 })
 
 const filteredProducts = computed(() => {
   const searchText = (props.search || '').toLowerCase()
 
   return products.value.filter((product) => {
-    const matchesSearch = `${product.name} ${product.category || ''}`
-      .toLowerCase()
-      .includes(searchText)
+    const searchableText = `
+      ${product.Name}
+      ${product.Category || ''}
+      ${product.Description || ''}
+    `.toLowerCase()
 
-    return (!showLowStock.value || isLowStock(product)) && matchesSearch
+    const matchesSearch = searchableText.includes(searchText)
+    const matchesLowStock =
+      !showLowStock.value || isLowStock(product)
+
+    return matchesSearch && matchesLowStock
   })
 })
 
+function getTokenFromStorage() {
+  return localStorage.getItem('access_token')
+}
+
+function isTokenExpired(token: string) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload.exp * 1000 < Date.now()
+  } catch {
+    return true
+  }
+}
+
+async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem('refresh_token')
+
+  if (!refreshToken) {
+    throw new Error('No refresh token available.')
+  }
+
+  const response = await fetch(`${API_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      refresh_token: refreshToken,
+      mode: 'json',
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error('Could not refresh the session.')
+  }
+
+  const result = (await response.json()) as DirectusRefreshResponse
+
+  if (!result.data) {
+    throw new Error('Could not refresh the session.')
+  }
+
+  localStorage.setItem('access_token', result.data.access_token)
+  localStorage.setItem('refresh_token', result.data.refresh_token)
+}
+
+async function getHeaders(includeJson = false) {
+  let token = getTokenFromStorage()
+
+  if (!token) {
+    throw new Error('You must log in before accessing products.')
+  }
+
+  if (isTokenExpired(token)) {
+    await refreshAccessToken()
+    token = getTokenFromStorage()
+  }
+
+  return {
+    ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+    Authorization: `Bearer ${token}`,
+  }
+}
+
 function isLowStock(product: Product) {
-  return Number(product.stock) < 250
+  return Number(product.Stock) < 250
 }
 
 function formatPrice(price: string | number) {
@@ -266,11 +348,11 @@ function getErrorMessage(
 
 function resetProductForm() {
   newProduct.value = {
-    name: '',
-    category: '',
-    description: '',
-    price: '',
-    stock: '0',
+    Name: '',
+    Category: '',
+    Description: '',
+    Price: '',
+    Stock: '0',
   }
 }
 
@@ -283,12 +365,15 @@ async function loadProducts() {
   loading.value = true
 
   try {
-    const response = await fetch(`${API_URL}/items/products`)
+    const response = await fetch(`${API_URL}/items/Products`, {
+      headers: await getHeaders(),
+    })
+
     const result = (await response.json()) as DirectusListResponse
 
     if (!response.ok) {
       throw new Error(
-        getErrorMessage(result, 'Could not load products from Directus.'),
+        getErrorMessage(result, 'Could not load Products from Directus.'),
       )
     }
 
@@ -297,7 +382,7 @@ async function loadProducts() {
     const message =
       error instanceof Error
         ? error.message
-        : 'Could not load products from Directus.'
+        : 'Could not load Products from Directus.'
 
     emit('notice', message)
   } finally {
@@ -306,17 +391,17 @@ async function loadProducts() {
 }
 
 async function addProduct() {
-  if (!newProduct.value.name.trim()) {
+  if (!newProduct.value.Name.trim()) {
     emit('notice', 'Product name is required.')
     return
   }
 
-  if (!newProduct.value.price || Number(newProduct.value.price) < 0) {
+  if (!newProduct.value.Price || Number(newProduct.value.Price) < 0) {
     emit('notice', 'Enter a valid product price.')
     return
   }
 
-  if (Number(newProduct.value.stock) < 0) {
+  if (Number(newProduct.value.Stock) < 0) {
     emit('notice', 'Stock quantity cannot be negative.')
     return
   }
@@ -324,17 +409,15 @@ async function addProduct() {
   saving.value = true
 
   try {
-    const response = await fetch(`${API_URL}/items/products`, {
+    const response = await fetch(`${API_URL}/items/Products`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: await getHeaders(true),
       body: JSON.stringify({
-        Name: newProduct.value.name.trim(),
-        Category: newProduct.value.category.trim(),
-        Description: newProduct.value.description.trim(),
-        Price: Number(newProduct.value.price),
-        Stock: Number(newProduct.value.stock),
+        Name: newProduct.value.Name.trim(),
+        Category: newProduct.value.Category.trim(),
+        Description: newProduct.value.Description.trim(),
+        Price: Number(newProduct.value.Price),
+        Stock: Number(newProduct.value.Stock),
       }),
     })
 
@@ -350,7 +433,7 @@ async function addProduct() {
 
     emit(
       'notice',
-      `"${result.data?.name || newProduct.value.name}" was added successfully.`,
+      `"${result.data?.Name || newProduct.value.Name}" was added successfully.`,
     )
 
     await loadProducts()
@@ -367,11 +450,11 @@ async function addProduct() {
 }
 
 function editProduct(product: Product) {
-  emit('notice', `Edit feature is not built yet for ${product.name}.`)
+  emit('notice', `Edit feature is not built yet for ${product.Name}.`)
 }
 
 function viewProduct(product: Product) {
-  emit('notice', `View feature is not built yet for ${product.name}.`)
+  emit('notice', `View feature is not built yet for ${product.Name}.`)
 }
 
 onMounted(loadProducts)
@@ -490,6 +573,31 @@ onMounted(loadProducts)
   line-height: 1.5;
 }
 
+.rating {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 14px;
+}
+
+.rating span {
+  color: #ffbd00;
+  letter-spacing: 2px;
+  font-size: 21px;
+}
+
+.rating i {
+  color: #c7d0dc;
+  font-size: 22px;
+  font-style: normal;
+}
+
+.rating small {
+  margin-left: 4px;
+  color: #64728a;
+  font-size: 14px;
+}
+
 .metrics {
   display: flex;
   justify-content: space-between;
@@ -578,6 +686,7 @@ onMounted(loadProducts)
 
 .list-view .category,
 .list-view .description,
+.list-view .rating,
 .list-view .metrics {
   margin: 8px 0;
 }

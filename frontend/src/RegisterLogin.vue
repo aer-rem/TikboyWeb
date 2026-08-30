@@ -1,12 +1,18 @@
-// TESTING TESTING
-
 <template>
   <v-app>
-    <DashboardOverview v-if="dashboardOpen" @logout="dashboardOpen = false" />
+    <DashboardOverview
+      v-if="dashboardOpen"
+      @logout="logout"
+    />
+
     <v-main v-else class="admin-access">
       <section class="access-page">
         <div class="brand-logo-wrapper">
-          <img src="@/assets/TBLOGO.png" alt="Tikboy Longganisa Logo" class="brand-logo" />
+          <img
+            src="@/assets/TBLOGO.png"
+            alt="Tikboy Longganisa Logo"
+            class="brand-logo"
+          />
         </div>
 
         <v-card class="access-card" elevation="0">
@@ -15,104 +21,166 @@
           </div>
 
           <header class="access-header">
-            <h1>{{ isSetup ? 'Setup Admin Access' : 'Admin Login' }}</h1>
+            <h1>Admin Login</h1>
+
             <p>
-              {{ isSetup
-                ? 'Create your admin passcode to secure the dashboard'
-                : 'Enter your passcode to access the dashboard' }}
+              Enter your Directus email and password to access the dashboard.
             </p>
           </header>
 
-          <v-form @submit.prevent="isSetup ? setupAccess() : login()">
-            <template v-if="isSetup">
-              <label for="new-passcode"><v-icon icon="mdi-key-variant" size="21" /> Create Admin Passcode</label>
-              <v-text-field
-                id="new-passcode"
-                v-model="newPasscode"
-                aria-label="Create admin passcode"
-                class="access-input"
-                hide-details
-                placeholder="Enter new passcode (min. 6 characters)"
-                type="password"
-                variant="solo"
-              />
+          <v-form @submit.prevent="login">
+            <label for="login-email">
+              <v-icon icon="mdi-email-outline" size="21" />
+              Email Address
+            </label>
 
-              <label for="confirm-passcode">Confirm Passcode</label>
-              <v-text-field
-                id="confirm-passcode"
-                v-model="confirmPasscode"
-                aria-label="Confirm passcode"
-                class="access-input"
-                hide-details
-                placeholder="Confirm your passcode"
-                type="password"
-                variant="solo"
-              />
+            <v-text-field
+              id="login-email"
+              v-model="email"
+              aria-label="Email address"
+              class="access-input"
+              hide-details
+              placeholder="Enter your email address"
+              type="email"
+              autocomplete="username"
+              variant="solo"
+            />
 
-              <v-divider class="form-divider" />
+            <label for="login-password">
+              <v-icon icon="mdi-lock-outline" size="21" />
+              Password
+            </label>
 
-              <label for="security-question">Security Question (for passcode recovery)</label>
-              <v-text-field
-                id="security-question"
-                v-model="securityQuestion"
-                aria-label="Security question"
-                class="access-input"
-                hide-details
-                placeholder="e.g., What is your favorite food?"
-                variant="solo"
-              />
-              <v-text-field
-                v-model="securityAnswer"
-                aria-label="Security answer"
-                class="access-input"
-                hide-details
-                placeholder="Your answer"
-                variant="solo"
-              />
-            </template>
+            <v-text-field
+              id="login-password"
+              v-model="password"
+              aria-label="Password"
+              class="access-input login-input"
+              hide-details
+              placeholder="Enter your password"
+              type="password"
+              autocomplete="current-password"
+              variant="solo"
+            />
 
-            <template v-else>
-              <label for="login-passcode"><v-icon icon="mdi-lock-outline" size="21" /> Admin Passcode</label>
-              <v-text-field
-                id="login-passcode"
-                v-model="loginPasscode"
-                aria-label="Admin passcode"
-                class="access-input login-input"
-                hide-details
-                placeholder="Enter your passcode"
-                type="password"
-                variant="solo"
-              />
-            </template>
+            <p
+              v-if="message"
+              :class="['form-message', messageType]"
+              role="alert"
+            >
+              {{ message }}
+            </p>
 
-            <p v-if="message" :class="['form-message', messageType]" role="alert">{{ message }}</p>
-            <v-btn block class="submit-button" size="x-large" type="submit">
-              {{ isSetup ? 'Setup Dashboard Access' : 'Login to Dashboard' }}
+            <v-btn
+              block
+              class="submit-button"
+              size="x-large"
+              type="submit"
+              :loading="loading"
+            >
+              Login to Dashboard
               <v-icon icon="mdi-arrow-right" end />
             </v-btn>
           </v-form>
 
-          <button v-if="!isSetup" class="text-action" type="button" @click="recoveryOpen = true">Forgot your passcode?</button>
+          <button
+            class="text-action"
+            type="button"
+            @click="openRegistration"
+          >
+            Create an Owner Account
+          </button>
         </v-card>
 
-        <p class="security-note"><v-icon icon="mdi-lock-outline" size="21" /> Secure admin access for TIKBOY LONGGANISA Dashboard</p>
-        <button v-if="!isSetup" class="back-link" type="button" @click="resetAccess">← Back to Store</button>
+        <p class="security-note">
+          <v-icon icon="mdi-lock-outline" size="21" />
+          Secure access for TIKBOY LONGGANISA Dashboard
+        </p>
+
+        <button
+          class="back-link"
+          type="button"
+          @click="backToStore"
+        >
+          ← Back to Store
+        </button>
       </section>
     </v-main>
 
-    <v-dialog v-model="recoveryOpen" max-width="420">
-      <v-card class="recovery-card">
-        <v-card-title>Passcode Recovery</v-card-title>
+    <v-dialog v-model="registrationOpen" max-width="500">
+      <v-card class="registration-card">
+        <v-card-title>Create Owner Account</v-card-title>
+
         <v-card-text>
-          <p>Answer your security question to confirm your account.</p>
-          <strong>{{ savedAccess?.question }}</strong>
-          <v-text-field v-model="recoveryAnswer" class="mt-5" label="Your answer" variant="outlined" />
-          <p v-if="recoveryMessage" :class="['form-message', recoveryType]">{{ recoveryMessage }}</p>
+          <p class="registration-description">
+            Create an Owner account using your email and password.
+          </p>
+
+          <v-text-field
+            v-model="registration.firstName"
+            label="First Name"
+            variant="outlined"
+            :disabled="registering"
+          />
+
+          <v-text-field
+            v-model="registration.lastName"
+            label="Last Name"
+            variant="outlined"
+            :disabled="registering"
+          />
+
+          <v-text-field
+            v-model="registration.email"
+            label="Email Address"
+            type="email"
+            variant="outlined"
+            :disabled="registering"
+          />
+
+          <v-text-field
+            v-model="registration.password"
+            label="Password"
+            type="password"
+            variant="outlined"
+            hint="Use at least 8 characters."
+            :disabled="registering"
+          />
+
+          <v-text-field
+            v-model="registration.confirmPassword"
+            label="Confirm Password"
+            type="password"
+            variant="outlined"
+            :disabled="registering"
+          />
+
+          <p
+            v-if="registrationMessage"
+            :class="['form-message', registrationMessageType]"
+          >
+            {{ registrationMessage }}
+          </p>
         </v-card-text>
+
         <v-card-actions>
-          <v-btn @click="recoveryOpen = false">Cancel</v-btn>
+          <v-btn
+            :disabled="registering"
+            @click="registrationOpen = false"
+          >
+            Cancel
+          </v-btn>
+
           <v-spacer />
-          <v-btn color="primary" variant="flat" @click="verifyRecovery">Verify</v-btn>
+
+          <v-btn
+            color="primary"
+            variant="flat"
+            :loading="registering"
+            @click="registerOwner"
+          >
+            Create Account
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -120,202 +188,432 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref } from 'vue'
-  import DashboardOverview from '@/components/DashboardOverview.vue'
+import { onMounted, ref } from 'vue'
+import DashboardOverview from '@/components/DashboardOverview.vue'
 
-  type AccessDetails = { passcode: string, question: string, answer: string }
-  // Access details are retained for the current browser tab only.
-  // They survive refreshes but are cleared after the tab/browser session closes.
-  localStorage.removeItem('tikboy-admin-access')
-  const storageKey = 'tikboy-admin-access'
-  const readAccess = (): AccessDetails | null => {
-    try {
-      const value = sessionStorage.getItem(storageKey)
-      return value ? JSON.parse(value) as AccessDetails : null
-    } catch { return null }
+const API_URL = 'http://localhost:8055'
+
+type DirectusErrorResponse = {
+  errors?: Array<{
+    message?: string
+  }>
+}
+
+type DirectusLoginResponse = DirectusErrorResponse & {
+  data?: {
+    access_token: string
+    refresh_token: string
+    expires: number
   }
-  const savedAccess = ref<AccessDetails | null>(readAccess())
-  const isSetup = computed(() => !savedAccess.value)
-  const newPasscode = ref('')
-  const confirmPasscode = ref('')
-  const securityQuestion = ref('')
-  const securityAnswer = ref('')
-  const loginPasscode = ref('')
-  const message = ref('')
-  const messageType = ref<'error' | 'success'>('error')
-  const recoveryOpen = ref(false)
-  const recoveryAnswer = ref('')
-  const recoveryMessage = ref('')
-  const recoveryType = ref<'error' | 'success'>('error')
-  const dashboardOpen = ref(false)
+}
 
-  const setMessage = (text: string, type: 'error' | 'success' = 'error') => {
-    message.value = text
-    messageType.value = type
+const email = ref('')
+const password = ref('')
+const message = ref('')
+const messageType = ref<'error' | 'success'>('error')
+const loading = ref(false)
+const dashboardOpen = ref(false)
+
+const registrationOpen = ref(false)
+const registering = ref(false)
+const registrationMessage = ref('')
+const registrationMessageType = ref<'error' | 'success'>('error')
+
+const registration = ref({
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+})
+
+function setMessage(
+  text: string,
+  type: 'error' | 'success' = 'error',
+) {
+  message.value = text
+  messageType.value = type
+}
+
+function getErrorMessage(
+  result: DirectusErrorResponse,
+  fallbackMessage: string,
+) {
+  return result.errors?.[0]?.message || fallbackMessage
+}
+
+function resetRegistrationForm() {
+  registration.value = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
   }
 
-  const setupAccess = () => {
-    if (newPasscode.value.length < 6) return setMessage('Your passcode must be at least 6 characters.')
-    if (newPasscode.value !== confirmPasscode.value) return setMessage('The passcodes do not match.')
-    if (!securityQuestion.value.trim() || !securityAnswer.value.trim()) return setMessage('Add a security question and answer to continue.')
-    savedAccess.value = { passcode: newPasscode.value, question: securityQuestion.value.trim(), answer: securityAnswer.value.trim() }
-    sessionStorage.setItem(storageKey, JSON.stringify(savedAccess.value))
-    setMessage('', 'success')
+  registrationMessage.value = ''
+  registrationMessageType.value = 'error'
+}
+
+function openRegistration() {
+  resetRegistrationForm()
+  registrationOpen.value = true
+}
+
+async function login() {
+  setMessage('')
+
+  if (!email.value.trim()) {
+    setMessage('Enter your email address.')
+    return
   }
 
-  const login = () => {
-    if (loginPasscode.value !== savedAccess.value?.passcode) return setMessage('Incorrect passcode. Please try again.')
-    dashboardOpen.value = true
+  if (!password.value) {
+    setMessage('Enter your password.')
+    return
   }
 
-  const verifyRecovery = () => {
-    if (recoveryAnswer.value.trim().toLowerCase() !== savedAccess.value?.answer.toLowerCase()) {
-      recoveryMessage.value = 'That answer does not match. Please try again.'
-      recoveryType.value = 'error'
-      return
+  loading.value = true
+
+  try {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email.value.trim(),
+        password: password.value,
+      }),
+    })
+
+    const result = (await response.json()) as DirectusLoginResponse
+
+    if (!response.ok || !result.data) {
+      throw new Error(
+        getErrorMessage(result, 'Incorrect email or password.'),
+      )
     }
-    recoveryMessage.value = 'Verified. Your passcode is: ' + savedAccess.value.passcode
-    recoveryType.value = 'success'
+
+    localStorage.setItem('access_token', result.data.access_token)
+    localStorage.setItem('refresh_token', result.data.refresh_token)
+
+    password.value = ''
+    dashboardOpen.value = true
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : 'Could not log in to Directus.'
+
+    setMessage(errorMessage)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function registerOwner() {
+  registrationMessage.value = ''
+
+  if (!registration.value.firstName.trim()) {
+    registrationMessage.value = 'Enter your first name.'
+    registrationMessageType.value = 'error'
+    return
   }
 
-  const resetAccess = () => {
-    message.value = 'Store navigation is ready to connect to your storefront.'
-    messageType.value = 'success'
+  if (!registration.value.lastName.trim()) {
+    registrationMessage.value = 'Enter your last name.'
+    registrationMessageType.value = 'error'
+    return
   }
+
+  if (!registration.value.email.trim()) {
+    registrationMessage.value = 'Enter your email address.'
+    registrationMessageType.value = 'error'
+    return
+  }
+
+  if (registration.value.password.length < 8) {
+    registrationMessage.value =
+      'Password must be at least 8 characters.'
+    registrationMessageType.value = 'error'
+    return
+  }
+
+  if (
+    registration.value.password !==
+    registration.value.confirmPassword
+  ) {
+    registrationMessage.value = 'The passwords do not match.'
+    registrationMessageType.value = 'error'
+    return
+  }
+
+  registering.value = true
+
+  try {
+    const response = await fetch(`${API_URL}/users/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: registration.value.email.trim(),
+        password: registration.value.password,
+        first_name: registration.value.firstName.trim(),
+        last_name: registration.value.lastName.trim(),
+      }),
+    })
+
+    if (!response.ok) {
+      const result = (await response.json()) as DirectusErrorResponse
+
+      throw new Error(
+        getErrorMessage(result, 'Could not create the account.'),
+      )
+    }
+
+    registrationMessage.value =
+      'Account created successfully. You can now log in.'
+
+    registrationMessageType.value = 'success'
+
+    registration.value = {
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    }
+  } catch (error: unknown) {
+    registrationMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not create the account.'
+
+    registrationMessageType.value = 'error'
+  } finally {
+    registering.value = false
+  }
+}
+
+async function restoreSavedSession() {
+  const token = localStorage.getItem('access_token')
+
+  if (!token) {
+    return
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/users/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error('Saved login is no longer valid.')
+    }
+
+    dashboardOpen.value = true
+  } catch {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+  }
+}
+
+function logout() {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('refresh_token')
+
+  email.value = ''
+  password.value = ''
+  dashboardOpen.value = false
+
+  setMessage('You have logged out successfully.', 'success')
+}
+
+function backToStore() {
+  setMessage(
+    'Store navigation is ready to connect to your storefront.',
+    'success',
+  )
+}
+
+onMounted(restoreSavedSession)
 </script>
 
 <style scoped>
-  .brand-logo {
-    max-width: 300px; 
-    width: 100%; 
-    height: auto; 
-    object-fit: contain;}
+.brand-logo {
+  max-width: 300px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
 
-  .admin-access { 
-    min-height: 100vh; 
-    background: #f5f6f8; 
-    color: #102847; 
-    font-family: Roboto, sans-serif; }
+.admin-access {
+  min-height: 100vh;
+  background: #f5f6f8;
+  color: #102847;
+  font-family: Roboto, sans-serif;
+}
 
-  .access-page { 
-    width: min(100% - 48px, 560px); 
-    margin: 40px auto 24px; 
-    text-align: center; }
+.access-page {
+  width: min(100% - 48px, 560px);
+  margin: 40px auto 24px;
+  text-align: center;
+}
 
-  .access-card { 
-    padding: 40px 40px 39px; 
-    border-radius: 20px; 
-    background: #fff; 
-    box-shadow: 0 14px 20px rgba(16, 40, 71, .13) !important; 
-    text-align: left; }
+.access-card {
+  padding: 40px 40px 39px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 14px 20px rgba(16, 40, 71, 0.13) !important;
+  text-align: left;
+}
 
-  .shield-badge { 
-    display: grid; 
-    place-items: center; 
-    width: 80px; 
-    height: 80px; 
-    margin: 0 auto 24px; 
-    border-radius: 50%; 
-    background: #d1283a; 
-    color: white; }
+.shield-badge {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  border-radius: 50%;
+  background: #d1283a;
+  color: white;
+}
 
-  .access-header { 
-    text-align: center; 
-    margin-bottom: 39px; }
+.access-header {
+  margin-bottom: 39px;
+  text-align: center;
+}
 
-  h1 { 
-    margin: 0 0 12px; 
-    color: #071e40; 
-    font-size: 30px; 
-    font-weight: 700; 
-    line-height: 1.1; }
+h1 {
+  margin: 0 0 12px;
+  color: #071e40;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+}
 
-  .access-header p { 
-    margin: 0; 
-    color: #334d70; 
-    font-size: 17px; }
+.access-header p {
+  margin: 0;
+  color: #334d70;
+  font-size: 17px;
+}
 
-  label { 
-    display: flex; 
-    align-items: center; 
-    gap: 9px; 
-    margin: 0 0 10px; 
-    color: #203a5d; 
-    font-size: 16px; 
-    font-weight: 700; }
+label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 10px;
+  color: #203a5d;
+  font-size: 16px;
+  font-weight: 700;
+}
 
-  .access-input { 
-    margin-bottom: 25px; }
+.access-input {
+  margin-bottom: 25px;
+}
 
-  :deep(.access-input .v-field) { 
-    background: #f4f4f6; 
-    border-radius: 10px; 
-    box-shadow: none; 
-    min-height: 60px; }
+:deep(.access-input .v-field) {
+  min-height: 60px;
+  border-radius: 10px;
+  background: #f4f4f6;
+  box-shadow: none;
+}
 
-  :deep(.access-input .v-field__input) { 
-    color: #314969; 
-    font-size: 16px; 
-    opacity: 1; 
-    padding: 0 16px; }
+:deep(.access-input .v-field__input) {
+  padding: 0 16px;
+  color: #314969;
+  font-size: 16px;
+  opacity: 1;
+}
 
-  :deep(.access-input .v-field__input::placeholder) { 
-    color: #566d8e; 
-    opacity: 1; }
+:deep(.access-input .v-field__input::placeholder) {
+  color: #566d8e;
+  opacity: 1;
+}
 
-  .form-divider { 
-    margin: -5px 0 25px; }
+.submit-button {
+  border-radius: 10px;
+  background: #d1283a;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
 
-  .submit-button { 
-    background: #d1283a; 
-    border-radius: 10px; 
-    color: white; 
-    font-size: 16px; 
-    font-weight: 700; 
-    text-transform: none; 
-    letter-spacing: 0; }
+.form-message {
+  margin: 16px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+}
 
-  .form-message { 
-    margin: -10px 0 16px; 
-    font-size: 14px; 
-    font-weight: 500; }
-    
-  .error { color: #c42a39; } .success { color: #23824e; }
+.error {
+  color: #c42a39;
+}
 
-  .text-action, .back-link { 
-    display: block; 
-    border: 0; 
-    background: none; 
-    color: #d1283a; 
-    cursor: pointer; 
-    font: inherit; 
-    font-weight: 600; }
+.success {
+  color: #23824e;
+}
 
-  .text-action { 
-    margin: 30px auto 0; }
+.text-action,
+.back-link {
+  display: block;
+  border: 0;
+  background: none;
+  color: #d1283a;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
 
-  .security-note { 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    gap: 8px; 
-    margin: 33px 0 19px; 
-    color: #334d70; 
-    font-size: 16px; }
+.text-action {
+  margin: 30px auto 0;
+}
 
-  .back-link { 
-    margin: 0 auto; font-size: 16px; }
+.back-link {
+  margin: 0 auto;
+  font-size: 16px;
+}
 
-  .recovery-card { 
-    border-radius: 16px; }
+.security-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 33px 0 19px;
+  color: #334d70;
+  font-size: 16px;
+}
 
-  @media (max-width: 600px) { 
-    .access-page { 
-      width: min(100% - 32px, 560px); 
-      margin-top: 20px; } 
-    .access-card { 
-      padding: 32px 28px; } h1 { font-size: 28px; } 
-    .access-header p { 
-      font-size: 16px; } }
+.registration-card {
+  border-radius: 16px;
+}
 
+.registration-description {
+  margin: 0 0 22px;
+  color: #526985;
+}
+
+@media (max-width: 600px) {
+  .access-page {
+    width: min(100% - 32px, 560px);
+    margin-top: 20px;
+  }
+
+  .access-card {
+    padding: 32px 28px;
+  }
+
+  h1 {
+    font-size: 28px;
+  }
+
+  .access-header p {
+    font-size: 16px;
+  }
+}
 </style>
