@@ -2,9 +2,13 @@
   <section class="products-page">
     <div class="product-toolbar">
       <div class="left-actions">
-        <button class="add-button" @click="openAddDialog">
-          <v-icon icon="mdi-plus" />
-          Add Product
+        <button
+          class="add-button"
+          :class="{ active: showAdd }"
+          @click="toggleAdd"
+        >
+          <v-icon :icon="showAdd ? 'mdi-close' : 'mdi-plus'" />
+          {{ showAdd ? 'Close' : 'Add Product' }}
         </button>
 
         <button
@@ -36,39 +40,102 @@
       </div>
     </div>
 
-    <v-progress-linear
-      v-if="loading"
-      class="mb-6"
-      color="primary"
-      indeterminate
-    />
+    <v-expand-transition>
+      <div v-if="showAdd" class="add-panel">
+        <div class="add-panel-header">
+          <div>
+            <h3>Add New Product</h3>
+            <p>Fill in the details below to add a product to the database.</p>
+          </div>
+          <button class="close-button" aria-label="Close" @click="showAdd = false">
+            <v-icon icon="mdi-close" />
+          </button>
+        </div>
 
-    <p
-      v-if="!loading && filteredProducts.length === 0"
-      class="empty-message"
-    >
+        <v-form @submit.prevent="addProduct">
+          <div class="form-grid">
+            <v-text-field
+              v-model="newProduct.Name"
+              label="Product Name"
+              placeholder="Example: TIKBOY Longganisa"
+              variant="outlined"
+              :disabled="saving"
+              required
+            />
+
+            <v-text-field
+              v-model="newProduct.Category"
+              label="Category"
+              placeholder="Example: Classic"
+              variant="outlined"
+              :disabled="saving"
+            />
+          </div>
+
+          <v-textarea
+            v-model="newProduct.Description"
+            label="Description"
+            placeholder="Describe the product"
+            variant="outlined"
+            rows="3"
+            :disabled="saving"
+          />
+
+          <div class="form-grid">
+            <v-text-field
+              v-model="newProduct.Price"
+              label="Price"
+              type="number"
+              prefix="₱"
+              step="0.01"
+              min="0"
+              variant="outlined"
+              :disabled="saving"
+              required
+            />
+
+            <v-text-field
+              v-model="newProduct.Stock"
+              label="Stock Quantity"
+              type="number"
+              min="0"
+              variant="outlined"
+              :disabled="saving"
+              required
+            />
+          </div>
+
+          <div class="form-actions">
+            <v-btn variant="tonal" :disabled="saving" @click="showAdd = false">
+              Cancel
+            </v-btn>
+
+            <v-btn color="primary" variant="flat" type="submit" :loading="saving">
+              <v-icon icon="mdi-content-save" start />
+              Save Product
+            </v-btn>
+          </div>
+        </v-form>
+      </div>
+    </v-expand-transition>
+
+    <v-progress-linear v-if="loading" class="mb-6" color="primary" indeterminate />
+
+    <p v-if="!loading && filteredProducts.length === 0" class="empty-message">
       No products found. Click “Add Product” to create your first product.
     </p>
 
     <div :class="['product-grid', { 'list-view': listView }]">
-      <article
-        v-for="product in filteredProducts"
-        :key="product.id"
-        class="product-card"
-      >
+      <article v-for="product in filteredProducts" :key="product.id" class="product-card">
         <div class="product-image">
           <v-icon icon="mdi-cube-outline" size="70" />
         </div>
 
         <h2>{{ product.Name }}</h2>
 
-        <p class="category">
-          {{ product.Category || 'Uncategorized' }}
-        </p>
+        <p class="category">{{ product.Category || 'Uncategorized' }}</p>
 
-        <p class="description">
-          {{ product.Description || 'No description added yet.' }}
-        </p>
+        <p class="description">{{ product.Description || 'No description added yet.' }}</p>
 
         <div class="rating">
           <span>★★★★</span>
@@ -93,101 +160,17 @@
         </p>
 
         <div class="card-actions">
-          <button
-            aria-label="Edit product"
-            @click="editProduct(product)"
-          >
+          <button aria-label="Edit product" @click="editProduct(product)">
             <v-icon icon="mdi-square-edit-outline" />
           </button>
 
-          <button
-            class="view-button"
-            @click="viewProduct(product)"
-          >
+          <button class="view-button" @click="viewProduct(product)">
             <v-icon icon="mdi-eye-outline" />
             View
           </button>
         </div>
       </article>
     </div>
-
-    <v-dialog v-model="showAdd" max-width="520">
-      <v-card class="dialog-card">
-        <v-card-title>Add Product</v-card-title>
-
-        <v-card-text>
-          <v-form @submit.prevent="addProduct">
-            <v-text-field
-              v-model="newProduct.Name"
-              label="Product Name"
-              placeholder="Example: TIKBOY Longganisa"
-              variant="outlined"
-              :disabled="saving"
-              required
-            />
-
-            <v-text-field
-              v-model="newProduct.Category"
-              label="Category"
-              placeholder="Example: Classic"
-              variant="outlined"
-              :disabled="saving"
-            />
-
-            <v-textarea
-              v-model="newProduct.Description"
-              label="Description"
-              placeholder="Describe the product"
-              variant="outlined"
-              rows="3"
-              :disabled="saving"
-            />
-
-            <v-text-field
-              v-model="newProduct.Price"
-              label="Price"
-              type="number"
-              prefix="₱"
-              step="0.01"
-              min="0"
-              variant="outlined"
-              :disabled="saving"
-              required
-            />
-
-            <v-text-field
-              v-model="newProduct.Stock"
-              label="Stock Quantity"
-              type="number"
-              min="0"
-              variant="outlined"
-              :disabled="saving"
-              required
-            />
-
-            <v-card-actions class="px-0">
-              <v-spacer />
-
-              <v-btn
-                :disabled="saving"
-                @click="showAdd = false"
-              >
-                Cancel
-              </v-btn>
-
-              <v-btn
-                color="primary"
-                variant="flat"
-                type="submit"
-                :loading="saving"
-              >
-                Save Product
-              </v-btn>
-            </v-card-actions>
-          </v-form>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
   </section>
 </template>
 
@@ -204,9 +187,7 @@ type Product = {
 }
 
 type DirectusErrorResponse = {
-  errors?: Array<{
-    message?: string
-  }>
+  errors?: Array<{ message?: string }>
 }
 
 type DirectusListResponse = DirectusErrorResponse & {
@@ -218,21 +199,15 @@ type DirectusCreateResponse = DirectusErrorResponse & {
 }
 
 type DirectusRefreshResponse = DirectusErrorResponse & {
-  data?: {
-    access_token: string
-    refresh_token: string
-  }
+  data?: { access_token: string; refresh_token: string }
 }
 
-const props = defineProps<{
-  search?: string
-}>()
+const props = defineProps<{ search?: string }>()
 
-const emit = defineEmits<{
-  notice: [message: string]
-}>()
+const emit = defineEmits<{ notice: [message: string] }>()
 
 const API_URL = 'http://localhost:8055'
+const LOW_STOCK_THRESHOLD = 30
 
 const showAdd = ref(false)
 const showLowStock = ref(false)
@@ -261,8 +236,7 @@ const filteredProducts = computed(() => {
     `.toLowerCase()
 
     const matchesSearch = searchableText.includes(searchText)
-    const matchesLowStock =
-      !showLowStock.value || isLowStock(product)
+    const matchesLowStock = !showLowStock.value || isLowStock(product)
 
     return matchesSearch && matchesLowStock
   })
@@ -283,31 +257,18 @@ function isTokenExpired(token: string) {
 
 async function refreshAccessToken() {
   const refreshToken = localStorage.getItem('refresh_token')
-
-  if (!refreshToken) {
-    throw new Error('No refresh token available.')
-  }
+  if (!refreshToken) throw new Error('No refresh token available.')
 
   const response = await fetch(`${API_URL}/auth/refresh`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      refresh_token: refreshToken,
-      mode: 'json',
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken, mode: 'json' }),
   })
 
-  if (!response.ok) {
-    throw new Error('Could not refresh the session.')
-  }
+  if (!response.ok) throw new Error('Could not refresh the session.')
 
   const result = (await response.json()) as DirectusRefreshResponse
-
-  if (!result.data) {
-    throw new Error('Could not refresh the session.')
-  }
+  if (!result.data) throw new Error('Could not refresh the session.')
 
   localStorage.setItem('access_token', result.data.access_token)
   localStorage.setItem('refresh_token', result.data.refresh_token)
@@ -315,10 +276,7 @@ async function refreshAccessToken() {
 
 async function getHeaders(includeJson = false) {
   let token = getTokenFromStorage()
-
-  if (!token) {
-    throw new Error('You must log in before accessing products.')
-  }
+  if (!token) throw new Error('You must log in before accessing products.')
 
   if (isTokenExpired(token)) {
     await refreshAccessToken()
@@ -332,17 +290,14 @@ async function getHeaders(includeJson = false) {
 }
 
 function isLowStock(product: Product) {
-  return Number(product.Stock) < 250
+  return Number(product.Stock) < LOW_STOCK_THRESHOLD
 }
 
 function formatPrice(price: string | number) {
   return `₱${Number(price).toFixed(2)}`
 }
 
-function getErrorMessage(
-  result: DirectusErrorResponse,
-  fallbackMessage: string,
-) {
+function getErrorMessage(result: DirectusErrorResponse, fallbackMessage: string) {
   return result.errors?.[0]?.message || fallbackMessage
 }
 
@@ -356,7 +311,11 @@ function resetProductForm() {
   }
 }
 
-function openAddDialog() {
+function toggleAdd() {
+  if (showAdd.value) {
+    showAdd.value = false
+    return
+  }
   resetProductForm()
   showAdd.value = true
 }
@@ -372,18 +331,16 @@ async function loadProducts() {
     const result = (await response.json()) as DirectusListResponse
 
     if (!response.ok) {
-      throw new Error(
-        getErrorMessage(result, 'Could not load Products from Directus.'),
-      )
+      throw new Error(getErrorMessage(result, 'Could not load Products from Directus.'))
     }
 
-    products.value = result.data || []
+    /* Only show products that still have stock. Sold-out items are hidden. */
+    products.value = (result.data || []).filter(
+      (product) => Number(product.Stock) > 0,
+    )
   } catch (error: unknown) {
     const message =
-      error instanceof Error
-        ? error.message
-        : 'Could not load Products from Directus.'
-
+      error instanceof Error ? error.message : 'Could not load Products from Directus.'
     emit('notice', message)
   } finally {
     loading.value = false
@@ -424,25 +381,15 @@ async function addProduct() {
     const result = (await response.json()) as DirectusCreateResponse
 
     if (!response.ok) {
-      throw new Error(
-        getErrorMessage(result, 'Could not save the product.'),
-      )
+      throw new Error(getErrorMessage(result, 'Could not save the product.'))
     }
 
     showAdd.value = false
-
-    emit(
-      'notice',
-      `"${result.data?.Name || newProduct.value.Name}" was added successfully.`,
-    )
-
+    emit('notice', `"${result.data?.Name || newProduct.value.Name}" was added successfully.`)
     await loadProducts()
   } catch (error: unknown) {
     const message =
-      error instanceof Error
-        ? error.message
-        : 'Something went wrong while saving the product.'
-
+      error instanceof Error ? error.message : 'Something went wrong while saving the product.'
     emit('notice', message)
   } finally {
     saving.value = false
@@ -495,6 +442,11 @@ onMounted(loadProducts)
   background: #d92e40;
   box-shadow: 0 7px 11px rgba(209, 40, 58, 0.18);
   color: white;
+  cursor: pointer;
+}
+
+.add-button.active {
+  background: #b32231;
 }
 
 .filter-button {
@@ -519,6 +471,64 @@ onMounted(loadProducts)
 .view-toggle .selected {
   background: #d12b3d;
   color: white;
+}
+
+.add-panel {
+  margin-bottom: 30px;
+  padding: 30px;
+  border: 1px solid #e0e5ec;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 2px 3px rgba(11, 32, 62, 0.05);
+}
+
+.add-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.add-panel-header h3 {
+  margin: 0;
+  color: #071b39;
+  font-size: 21px;
+}
+
+.add-panel-header p {
+  margin: 6px 0 0;
+  color: #61718a;
+  font-size: 14px;
+}
+
+.close-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #f2f4f7;
+  color: #536277;
+  cursor: pointer;
+}
+
+.close-button:hover {
+  background: #fdebed;
+  color: #d12b3d;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
 }
 
 .empty-message {
@@ -663,10 +673,6 @@ onMounted(loadProducts)
   font-weight: 700;
 }
 
-.dialog-card {
-  border-radius: 16px;
-}
-
 .list-view {
   grid-template-columns: 1fr;
 }
@@ -747,6 +753,10 @@ onMounted(loadProducts)
 
   .product-image {
     height: 170px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
