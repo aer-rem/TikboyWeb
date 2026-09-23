@@ -25,7 +25,7 @@
           <div class="add-panel-header">
             <div>
               <h3>Add Stock</h3>
-              <p>Select a product and enter the quantity to add.</p>
+              <p>Select a product, choose its variant when needed, then enter the quantity.</p>
             </div>
             <button class="close-button" aria-label="Close" @click="showAdd = false">
               <v-icon icon="mdi-close" />
@@ -35,8 +35,36 @@
           <div class="add-form">
             <v-select
               v-model="restockTarget"
-              :items="inventory.map(item => item.name)"
+              :items="productOptions"
               label="Product"
+              variant="outlined"
+              :disabled="saving"
+              @update:model-value="onProductChange"
+            />
+
+            <v-text-field
+              v-if="isAddingNewProduct"
+              v-model="newProductName"
+              label="New Product Name"
+              placeholder="Example: Tikboy Tocino"
+              variant="outlined"
+              :disabled="saving"
+            />
+
+            <v-select
+              v-if="restockTarget === LONGGANISA_PRODUCT"
+              v-model="restockVariant"
+              :items="longganisaVariants"
+              label="Category and Size"
+              variant="outlined"
+              :disabled="saving"
+            />
+
+            <v-select
+              v-if="restockTarget === EMBUTIDO_PRODUCT"
+              v-model="restockVariant"
+              :items="embutidoSizes"
+              label="Size"
               variant="outlined"
               :disabled="saving"
             />
@@ -68,25 +96,35 @@
 
       <div class="table-wrap">
         <table>
+          <colgroup>
+            <col class="col-product" />
+            <col class="col-variant" />
+            <col class="col-stock" />
+            <col class="col-sold" />
+            <col class="col-status" />
+            <col class="col-actions" />
+          </colgroup>
           <thead>
             <tr>
               <th>Product</th>
-              <th>Category</th>
-              <th>Current Stock</th>
-              <th>Sold This Month</th>
+              <th>Category / Size</th>
+              <th class="numeric">Stock</th>
+              <th class="numeric">Sold</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th class="actions-head">Actions</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in inventory" :key="item.name">
+            <tr v-for="item in inventory" :key="item.key">
               <td>
                 <div class="product">
                   <span class="product-icon"><v-icon icon="mdi-cube-outline" /></span>
                   <strong>{{ item.name }}</strong>
                 </div>
               </td>
-              <td>{{ item.category }}</td>
+              <td class="variant-cell">
+                {{ [item.category, item.size].filter(Boolean).join(' • ') || '—' }}
+              </td>
               <td class="stock-number">{{ item.stock }}</td>
               <td class="stock-number">{{ item.sold }}</td>
               <td>
@@ -96,13 +134,21 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="edit-btn" @click="openEdit(item)">
+                  <button
+                    class="edit-btn"
+                    aria-label="Edit product"
+                    title="Edit"
+                    @click="openEdit(item)"
+                  >
                     <v-icon icon="mdi-pencil" />
-                    Edit
                   </button>
-                  <button class="restock" @click="openRestock(item)">
+                  <button
+                    class="restock"
+                    aria-label="Restock product"
+                    title="Restock"
+                    @click="openRestock(item)"
+                  >
                     <v-icon icon="mdi-plus" />
-                    Restock
                   </button>
                 </div>
               </td>
@@ -121,7 +167,15 @@
           <v-text-field
             v-model="editForm.category"
             label="Category"
-            placeholder="Example: Classic"
+            placeholder="Example: Regular, Spicy, Sweet"
+            variant="outlined"
+            :disabled="saving"
+          />
+
+          <v-text-field
+            v-model="editForm.size"
+            label="Size"
+            placeholder="Example: Big or Small"
             variant="outlined"
             :disabled="saving"
           />
@@ -162,8 +216,10 @@
 import { computed, onMounted, ref } from 'vue'
 
 type InventoryItem = {
+  key: string
   name: string
   category: string
+  size: string
   description: string
   stock: number
   sold: number
@@ -177,11 +233,19 @@ type DirectusErrorResponse = {
 type DirectusProduct = {
   id: string | number
   Name: string
-  Stock?: string | number
+  Category?: string | null
+  Size?: string | null
+  Description?: string | null
+  Price?: string | number | null
+  Stock?: string | number | null
 }
 
 type DirectusListResponse = DirectusErrorResponse & {
   data?: DirectusProduct[]
+}
+
+type DirectusItemResponse = DirectusErrorResponse & {
+  data?: DirectusProduct
 }
 
 type DirectusRefreshResponse = DirectusErrorResponse & {
@@ -193,28 +257,50 @@ const emit = defineEmits<{ notice: [message: string] }>()
 const API_URL = 'http://localhost:8055'
 const LOW_STOCK_THRESHOLD = 30
 
-const inventory = ref<InventoryItem[]>([
-  { name: 'TIKBOY Embutido (Pork)', category: 'Combo Packs', description: '', stock: 0, sold: 0, price: 250 },
-  { name: 'TIKBOY Longganisa (Big)', category: 'Classic', description: '', stock: 0, sold: 0, price: 220 },
-  { name: 'TIKBOY Longganisa (Small)', category: 'Classic', description: '', stock: 0, sold: 0, price: 150 },
-  { name: 'TIKBOY Spicy Longganisa', category: 'Spicy', description: '', stock: 0, sold: 0, price: 180 },
-  { name: 'TIKBOY Embutido (Chicken)', category: 'Premium', description: '', stock: 0, sold: 0, price: 260 },
-  { name: 'TIKBOY Sweet Longganisa', category: 'Classic', description: '', stock: 0, sold: 0, price: 160 },
-])
+const LONGGANISA_PRODUCT = 'Tikboy Longganisa'
+const EMBUTIDO_PRODUCT = 'Tikboy Embutido'
+const CHILI_GARLIC_PRODUCT = 'Crispy Chili Garlic Oil'
+const ADD_NEW_PRODUCT = '+ Add New Product'
+
+const productOptions = [
+  LONGGANISA_PRODUCT,
+  EMBUTIDO_PRODUCT,
+  CHILI_GARLIC_PRODUCT,
+  ADD_NEW_PRODUCT,
+]
+
+const longganisaVariants = [
+  'Regular – Big',
+  'Regular – Small',
+  'Spicy – Big',
+  'Spicy – Small',
+  'Sweet – Big',
+  'Sweet – Small',
+]
+
+const embutidoSizes = ['Big', 'Small']
+
+const inventory = ref<InventoryItem[]>([])
 
 const loading = ref(false)
 const saving = ref(false)
 const showAdd = ref(false)
 const showEdit = ref(false)
 const restockTarget = ref<string | null>(null)
+const restockVariant = ref<string | null>(null)
+const newProductName = ref('')
 const restockQty = ref('1')
 
 const editForm = ref({
+  key: '',
   name: '',
   category: '',
+  size: '',
   description: '',
   price: '',
 })
+
+const isAddingNewProduct = computed(() => restockTarget.value === ADD_NEW_PRODUCT)
 
 const stats = computed(() => {
   const totalProducts = inventory.value.length
@@ -238,6 +324,10 @@ const stats = computed(() => {
     },
   ]
 })
+
+function makeInventoryKey(name: string, category: string, size: string) {
+  return `${name.trim().toLowerCase()}::${category.trim().toLowerCase()}::${size.trim().toLowerCase()}`
+}
 
 function getTokenFromStorage() {
   return localStorage.getItem('access_token')
@@ -290,13 +380,74 @@ function getErrorMessage(result: DirectusErrorResponse, fallbackMessage: string)
   return result.errors?.[0]?.message || fallbackMessage
 }
 
+function mapProductToInventoryItem(product: DirectusProduct): InventoryItem {
+  const name = String(product.Name || '').trim()
+  const category = String(product.Category || '').trim()
+  const size = String(product.Size || '').trim()
+
+  return {
+    key: makeInventoryKey(name, category, size),
+    name,
+    category,
+    size,
+    description: String(product.Description || ''),
+    stock: Number(product.Stock) || 0,
+    sold: 0,
+    price: Number(product.Price) || 0,
+  }
+}
+
+function resetAddForm() {
+  restockTarget.value = null
+  restockVariant.value = null
+  newProductName.value = ''
+  restockQty.value = '1'
+}
+
+function onProductChange() {
+  restockVariant.value = null
+  newProductName.value = ''
+}
+
+function getSelectedProductName() {
+  if (restockTarget.value === ADD_NEW_PRODUCT) {
+    return newProductName.value.trim()
+  }
+
+  return restockTarget.value?.trim() || ''
+}
+
+function getSelectedVariant() {
+  if (restockTarget.value === LONGGANISA_PRODUCT) {
+    if (!restockVariant.value) {
+      return { category: '', size: '' }
+    }
+
+    const [category, size] = restockVariant.value.split(' – ')
+    return {
+      category: category?.trim() || '',
+      size: size?.trim() || '',
+    }
+  }
+
+  if (restockTarget.value === EMBUTIDO_PRODUCT) {
+    return {
+      category: '',
+      size: restockVariant.value?.trim() || '',
+    }
+  }
+
+  return { category: '', size: '' }
+}
+
 async function loadInventory() {
   loading.value = true
 
   try {
-    const response = await fetch(`${API_URL}/items/Products`, {
-      headers: await getHeaders(),
-    })
+    const response = await fetch(
+      `${API_URL}/items/Products?fields=id,Name,Category,Size,Description,Price,Stock`,
+      { headers: await getHeaders() },
+    )
 
     const result = (await response.json()) as DirectusListResponse
 
@@ -304,17 +455,12 @@ async function loadInventory() {
       throw new Error(getErrorMessage(result, 'Could not load inventory.'))
     }
 
-    const dbProducts = result.data || []
+    const databaseItems = (result.data || [])
+      .filter((product) => product.Name)
+      .map(mapProductToInventoryItem)
 
-    inventory.value = inventory.value.map((item) => {
-      const match = dbProducts.find(
-        (product) => product.Name.toLowerCase() === item.name.toLowerCase(),
-      )
-      return {
-        ...item,
-        stock: match ? Number(match.Stock) || 0 : item.stock,
-      }
-    })
+    inventory.value = databaseItems
+
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : 'Could not load inventory.'
@@ -324,9 +470,24 @@ async function loadInventory() {
   }
 }
 
-async function findProductInDatabase(name: string): Promise<DirectusProduct | undefined> {
+async function findProductInDatabase(
+  name: string,
+  category: string,
+  size: string,
+): Promise<DirectusProduct | undefined> {
+  const filters = [
+    `filter[Name][_eq]=${encodeURIComponent(name)}`,
+    category
+      ? `filter[Category][_eq]=${encodeURIComponent(category)}`
+      : 'filter[Category][_empty]=true',
+    size
+      ? `filter[Size][_eq]=${encodeURIComponent(size)}`
+      : 'filter[Size][_empty]=true',
+    'limit=1',
+  ]
+
   const response = await fetch(
-    `${API_URL}/items/Products?filter[Name][_eq]=${encodeURIComponent(name)}`,
+    `${API_URL}/items/Products?${filters.join('&')}`,
     { headers: await getHeaders() },
   )
 
@@ -344,20 +505,50 @@ function toggleAdd() {
     showAdd.value = false
     return
   }
-  restockTarget.value = null
-  restockQty.value = '1'
+
+  resetAddForm()
   showAdd.value = true
 }
 
-function openRestock(item?: InventoryItem) {
-  restockTarget.value = item ? item.name : null
+function openRestock(item: InventoryItem) {
+  restockTarget.value = item.name
+  newProductName.value = ''
   restockQty.value = '1'
+
+  if (item.name === LONGGANISA_PRODUCT) {
+    restockVariant.value = item.category && item.size
+      ? `${item.category} – ${item.size}`
+      : null
+  } else if (item.name === EMBUTIDO_PRODUCT) {
+    restockVariant.value = item.size || null
+  } else {
+    restockVariant.value = null
+  }
+
   showAdd.value = true
 }
 
 async function saveStock() {
   if (!restockTarget.value) {
-    emit('notice', 'Select a product to restock.')
+    emit('notice', 'Select a product to add.')
+    return
+  }
+
+  const name = getSelectedProductName()
+  const { category, size } = getSelectedVariant()
+
+  if (!name) {
+    emit('notice', 'Enter a name for the new product.')
+    return
+  }
+
+  if (restockTarget.value === LONGGANISA_PRODUCT && (!category || !size)) {
+    emit('notice', 'Select a category and size for Tikboy Longganisa.')
+    return
+  }
+
+  if (restockTarget.value === EMBUTIDO_PRODUCT && !size) {
+    emit('notice', 'Select a size for Tikboy Embutido.')
     return
   }
 
@@ -367,19 +558,13 @@ async function saveStock() {
     return
   }
 
-  const item = inventory.value.find((entry) => entry.name === restockTarget.value)
-  if (!item) {
-    emit('notice', 'Product not found.')
-    return
-  }
-
   saving.value = true
 
   try {
-    const existing = await findProductInDatabase(item.name)
+    const existing = await findProductInDatabase(name, category, size)
 
     if (existing) {
-      const newStock = Number(existing.Stock) + qty
+      const newStock = (Number(existing.Stock) || 0) + qty
 
       const response = await fetch(`${API_URL}/items/Products/${existing.id}`, {
         method: 'PATCH',
@@ -387,41 +572,76 @@ async function saveStock() {
         body: JSON.stringify({ Stock: newStock }),
       })
 
-      const result = (await response.json()) as DirectusErrorResponse
+      const result = (await response.json()) as DirectusItemResponse
 
       if (!response.ok) {
         throw new Error(getErrorMessage(result, 'Could not update stock.'))
       }
 
-      item.stock = newStock
-      emit('notice', `Restocked ${item.name} (+${qty}). New stock: ${newStock}.`)
+      const item = inventory.value.find(
+        (entry) => entry.key === makeInventoryKey(name, category, size),
+      )
+
+      if (item) {
+        item.stock = newStock
+      } else {
+        inventory.value.push({
+          key: makeInventoryKey(name, category, size),
+          name,
+          category,
+          size,
+          description: String(existing.Description || ''),
+          stock: newStock,
+          sold: 0,
+          price: Number(existing.Price) || 0,
+        })
+      }
+
+      emit('notice', `Restocked ${name}${category ? ` (${category}` : ''}${size ? `${category ? ' – ' : ' ('}${size})` : ''} (+${qty}).`)
     } else {
+      const productToCreate = {
+        Name: name,
+        Category: category,
+        Size: size,
+        Description: '',
+        Price: 0,
+        Stock: qty,
+      }
+
       const response = await fetch(`${API_URL}/items/Products`, {
         method: 'POST',
         headers: await getHeaders(true),
-        body: JSON.stringify({
-          Name: item.name,
-          Category: item.category,
-          Description: item.description,
-          Price: item.price,
-          Stock: qty,
-        }),
+        body: JSON.stringify(productToCreate),
       })
 
-      const result = (await response.json()) as DirectusErrorResponse
+      const result = (await response.json()) as DirectusItemResponse
 
       if (!response.ok) {
         throw new Error(getErrorMessage(result, 'Could not add the product.'))
       }
 
-      item.stock = qty
-      emit('notice', `Added ${item.name} to Products with stock ${qty}.`)
+      const createdProduct = result.data || {
+        id: `${Date.now()}`,
+        ...productToCreate,
+      }
+
+      const newItem = mapProductToInventoryItem(createdProduct)
+      const existingIndex = inventory.value.findIndex((item) => item.key === newItem.key)
+
+      if (existingIndex >= 0) {
+        inventory.value[existingIndex] = newItem
+      } else {
+        inventory.value.push(newItem)
+      }
+
+      emit('notice', `Added ${name}${category ? ` (${category}` : ''}${size ? `${category ? ' – ' : ' ('}${size})` : ''} with stock ${qty}.`)
     }
 
     showAdd.value = false
+    resetAddForm()
   } catch (error: unknown) {
     const message =
-      error instanceof Error ? error.message : 'Something went wrong while restocking.'
+      error instanceof Error ? error.message : 'Something went wrong while adding stock.'
     emit('notice', message)
   } finally {
     saving.value = false
@@ -430,8 +650,10 @@ async function saveStock() {
 
 function openEdit(item: InventoryItem) {
   editForm.value = {
+    key: item.key,
     name: item.name,
     category: item.category,
+    size: item.size,
     description: item.description,
     price: String(item.price),
   }
@@ -439,7 +661,7 @@ function openEdit(item: InventoryItem) {
 }
 
 async function saveEdit() {
-  const item = inventory.value.find((entry) => entry.name === editForm.value.name)
+  const item = inventory.value.find((entry) => entry.key === editForm.value.key)
   if (!item) {
     emit('notice', 'Product not found.')
     return
@@ -448,20 +670,22 @@ async function saveEdit() {
   saving.value = true
 
   try {
-    const existing = await findProductInDatabase(item.name)
+    const existing = await findProductInDatabase(item.name, item.category, item.size)
+    const payload = {
+      Category: editForm.value.category.trim(),
+      Size: editForm.value.size.trim(),
+      Description: editForm.value.description,
+      Price: Number(editForm.value.price) || 0,
+    }
 
     if (existing) {
       const response = await fetch(`${API_URL}/items/Products/${existing.id}`, {
         method: 'PATCH',
         headers: await getHeaders(true),
-        body: JSON.stringify({
-          Category: editForm.value.category,
-          Description: editForm.value.description,
-          Price: Number(editForm.value.price) || 0,
-        }),
+        body: JSON.stringify(payload),
       })
 
-      const result = (await response.json()) as DirectusErrorResponse
+      const result = (await response.json()) as DirectusItemResponse
 
       if (!response.ok) {
         throw new Error(getErrorMessage(result, 'Could not update the product.'))
@@ -472,23 +696,23 @@ async function saveEdit() {
         headers: await getHeaders(true),
         body: JSON.stringify({
           Name: item.name,
-          Category: editForm.value.category,
-          Description: editForm.value.description,
-          Price: Number(editForm.value.price) || 0,
+          ...payload,
           Stock: item.stock,
         }),
       })
 
-      const result = (await response.json()) as DirectusErrorResponse
+      const result = (await response.json()) as DirectusItemResponse
 
       if (!response.ok) {
         throw new Error(getErrorMessage(result, 'Could not create the product.'))
       }
     }
 
-    item.category = editForm.value.category
-    item.description = editForm.value.description
-    item.price = Number(editForm.value.price) || 0
+    item.category = payload.Category
+    item.size = payload.Size
+    item.description = payload.Description
+    item.price = payload.Price
+    item.key = makeInventoryKey(item.name, item.category, item.size)
 
     showEdit.value = false
     emit('notice', `Updated ${item.name}.`)
@@ -505,12 +729,10 @@ onMounted(loadInventory)
 </script>
 
 <style scoped>
-/* ============ Page layout ============ */
 .inventory-page {
   padding: 39px 35px;
 }
 
-/* ============ Stats cards ============ */
 .inventory-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -545,7 +767,6 @@ onMounted(loadInventory)
   color: #e60000;
 }
 
-/* ============ Panel ============ */
 .inventory-panel {
   overflow: hidden;
   border: 1px solid #e0e5ec;
@@ -592,7 +813,6 @@ onMounted(loadInventory)
   background: #b32231;
 }
 
-/* ============ Add Stock dropdown panel ============ */
 .add-panel {
   padding: 24px 30px;
   border-bottom: 1px solid #e1e6ec;
@@ -637,25 +857,47 @@ onMounted(loadInventory)
 
 .add-form {
   display: grid;
-  grid-template-columns: 1fr 200px auto;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
   gap: 16px;
   align-items: center;
 }
 
-/* ============ Table ============ */
+/* ---- Table: fixed layout + percentage columns so it always fits the panel width ---- */
+
 .table-wrap {
   overflow-x: auto;
 }
 
 table {
   width: 100%;
-  min-width: 1080px;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
+.col-product {
+  width: 32%;
+}
+
+.col-variant {
+  width: 22%;
+}
+
+.col-stock,
+.col-sold {
+  width: 11%;
+}
+
+.col-status {
+  width: 13%;
+}
+
+.col-actions {
+  width: 11%;
+}
+
 th {
-  height: 56px;
-  padding: 0 15px;
+  height: 50px;
+  padding: 0 10px;
   background: #fafbfc;
   color: #7c8ba1;
   font-size: 12px;
@@ -669,34 +911,29 @@ th {
 
 th:first-child,
 td:first-child {
-  padding-left: 30px;
+  padding-left: 24px;
 }
 
 th:last-child,
 td:last-child {
-  padding-right: 30px;
+  padding-right: 24px;
 }
 
-th:nth-child(3),
-th:nth-child(4) {
+th.numeric {
   text-align: center;
-  width: 150px;
 }
 
-th:nth-child(5) {
-  width: 120px;
-}
-
-th:last-child {
-  width: 200px;
+th.actions-head {
+  text-align: right;
 }
 
 td {
-  padding: 20px 15px;
+  padding: 14px 10px;
   border-top: 1px solid #e1e6ec;
   color: #2f496b;
-  font-size: 16px;
+  font-size: 15px;
   vertical-align: middle;
+  overflow-wrap: anywhere;
 }
 
 tbody tr {
@@ -707,19 +944,18 @@ tbody tr:hover {
   background: #fafbfc;
 }
 
-/* ============ Product cell ============ */
 .product {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 10px;
 }
 
 .product-icon {
   display: grid;
   place-items: center;
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   background: #fde9ed;
   color: #de3043;
   flex-shrink: 0;
@@ -727,24 +963,29 @@ tbody tr:hover {
 
 .product strong {
   color: #071d3c;
-  font-size: 18px;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.variant-cell {
+  color: #4c5f7b;
+  font-size: 14px;
 }
 
 .stock-number {
   color: #081d3d;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   text-align: center;
 }
 
-/* ============ Status badge ============ */
 em {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 20px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   font-style: normal;
   white-space: nowrap;
@@ -760,24 +1001,22 @@ em {
   color: #00a548;
 }
 
-/* ============ Row action buttons ============ */
 .row-actions {
   display: flex;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .edit-btn,
 .restock {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 42px;
-  padding: 0 14px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 1px solid #d0d9e4;
   border-radius: 10px;
   background: white;
-  font-weight: 600;
-  font-size: 14px;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -801,7 +1040,6 @@ em {
   border-color: #d92e40;
 }
 
-/* ============ Dialog ============ */
 .dialog {
   border-radius: 16px;
 }
@@ -813,7 +1051,6 @@ em {
   font-weight: 700;
 }
 
-/* ============ Responsive ============ */
 @media (max-width: 1200px) {
   .inventory-page {
     padding: 28px;
@@ -831,6 +1068,32 @@ em {
 
   .add-form {
     grid-template-columns: 1fr;
+  }
+
+  .col-product {
+    width: 40%;
+  }
+
+  .col-variant {
+    width: 24%;
+  }
+
+  .col-stock,
+  .col-sold {
+    width: 10%;
+  }
+
+  .col-status {
+    display: none;
+  }
+
+  th:nth-child(5),
+  td:nth-child(5) {
+    display: none;
+  }
+
+  .col-actions {
+    width: 16%;
   }
 }
 
@@ -853,6 +1116,19 @@ em {
 
   .add-panel {
     padding: 20px 18px;
+  }
+
+  .col-sold {
+    display: none;
+  }
+
+  th:nth-child(4),
+  td:nth-child(4) {
+    display: none;
+  }
+
+  .col-variant {
+    width: 34%;
   }
 }
 </style>
