@@ -71,14 +71,8 @@
         </div>
       </header>
 
-      <Products
-        v-if="activeNav === 'Products'"
-        :search="search"
-        @notice="notify"
-      />
-
       <Orders
-        v-else-if="activeNav === 'Orders'"
+        v-if="activeNav === 'Orders'"
         :search="search"
         @notice="notify"
       />
@@ -106,6 +100,8 @@
         :search="search"
         @notice="notify"
       />
+
+      <Settings v-else-if="activeNav === 'Settings'" @notice="notify" />
 
       <section v-else class="page-body">
         <div class="quick-actions">
@@ -224,8 +220,8 @@ import Customers from '@/components/Customers.vue'
 import Inventory from '@/components/Inventory.vue'
 import Messages from '@/components/Messages.vue'
 import Orders from '@/components/Orders.vue'
-import Products from '@/components/Products.vue'
 import Reports from '@/components/Reports.vue'
+import Settings from '@/components/Settings.vue'
 
 const emit = defineEmits<{ logout: [] }>()
 
@@ -236,13 +232,13 @@ const notice = ref('')
 
 const navigation = [
   { label: 'Overview', icon: 'mdi-home-outline' },
-  { label: 'Products', icon: 'mdi-cube-outline' },
   { label: 'Orders', icon: 'mdi-cart-outline' },
   { label: 'Customers', icon: 'mdi-account-group-outline' },
   { label: 'Analytics', icon: 'mdi-chart-bar' },
   { label: 'Inventory', icon: 'mdi-view-grid-outline' },
   { label: 'Reports', icon: 'mdi-file-document-outline' },
   { label: 'Messages', icon: 'mdi-message-outline' },
+  { label: 'Settings', icon: 'mdi-cog-outline' },
 ]
 
 const quickActions = [
@@ -290,13 +286,13 @@ const filteredOrders = computed(() => {
 
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
-    Products: 'Product Management',
     Orders: 'Order Management',
     Customers: 'Customer Management',
     Analytics: 'Sales Analytics',
     Inventory: 'Inventory Management',
     Reports: 'Business Reports',
     Messages: 'Customer Messages',
+    Settings: 'Settings & Security',
   }
 
   return titles[activeNav.value] ?? 'Dashboard Overview'
