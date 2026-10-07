@@ -24,7 +24,7 @@
             <h1>Admin Login</h1>
 
             <p>
-              Enter your Directus email and password to access the dashboard.
+              Enter your owner email and password to access the dashboard.
             </p>
           </header>
 
@@ -190,22 +190,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import DashboardOverview from '@/components/DashboardOverview.vue'
-
-const API_URL = 'http://localhost:8055'
-
-type DirectusErrorResponse = {
-  errors?: Array<{
-    message?: string
-  }>
-}
-
-type DirectusLoginResponse = DirectusErrorResponse & {
-  data?: {
-    access_token: string
-    refresh_token: string
-    expires: number
-  }
-}
+import { supabase } from '@/lib/supabaseClient'
 
 const email = ref('')
 const password = ref('')
@@ -233,13 +218,6 @@ function setMessage(
 ) {
   message.value = text
   messageType.value = type
-}
-
-function getErrorMessage(
-  result: DirectusErrorResponse,
-  fallbackMessage: string,
-) {
-  return result.errors?.[0]?.message || fallbackMessage
 }
 
 function resetRegistrationForm() {
@@ -276,27 +254,14 @@ async function login() {
   loading.value = true
 
   try {
-    const response = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: email.value.trim(),
-        password: password.value,
-      }),
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.value.trim(),
+      password: password.value,
     })
 
-    const result = (await response.json()) as DirectusLoginResponse
-
-    if (!response.ok || !result.data) {
-      throw new Error(
-        getErrorMessage(result, 'Incorrect email or password.'),
-      )
+    if (error) {
+      throw error
     }
-
-    localStorage.setItem('access_token', result.data.access_token)
-    localStorage.setItem('refresh_token', result.data.refresh_token)
 
     password.value = ''
     dashboardOpen.value = true
@@ -304,7 +269,7 @@ async function login() {
     const errorMessage =
       error instanceof Error
         ? error.message
-        : 'Could not log in to Directus.'
+        : 'Incorrect email or password.'
 
     setMessage(errorMessage)
   } finally {
@@ -334,8 +299,7 @@ async function registerOwner() {
   }
 
   if (registration.value.password.length < 8) {
-    registrationMessage.value =
-      'Password must be at least 8 characters.'
+    registrationMessage.value = 'Password must be at least 8 characters.'
     registrationMessageType.value = 'error'
     return
   }
@@ -352,29 +316,23 @@ async function registerOwner() {
   registering.value = true
 
   try {
-    const response = await fetch(`${API_URL}/users/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const { error } = await supabase.auth.signUp({
+      email: registration.value.email.trim(),
+      password: registration.value.password,
+      options: {
+        data: {
+          first_name: registration.value.firstName.trim(),
+          last_name: registration.value.lastName.trim(),
+        },
       },
-      body: JSON.stringify({
-        email: registration.value.email.trim(),
-        password: registration.value.password,
-        first_name: registration.value.firstName.trim(),
-        last_name: registration.value.lastName.trim(),
-      }),
     })
 
-    if (!response.ok) {
-      const result = (await response.json()) as DirectusErrorResponse
-
-      throw new Error(
-        getErrorMessage(result, 'Could not create the account.'),
-      )
+    if (error) {
+      throw error
     }
 
     registrationMessage.value =
-      'Account created successfully. You can now log in.'
+      'Owner account created. Check your email if confirmation is required, then log in.'
 
     registrationMessageType.value = 'success'
 
@@ -389,7 +347,7 @@ async function registerOwner() {
     registrationMessage.value =
       error instanceof Error
         ? error.message
-        : 'Could not create the account.'
+        : 'Could not create the owner account.'
 
     registrationMessageType.value = 'error'
   } finally {
@@ -398,33 +356,20 @@ async function registerOwner() {
 }
 
 async function restoreSavedSession() {
-  const token = localStorage.getItem('access_token')
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  if (!token) {
-    return
-  }
-
-  try {
-    const response = await fetch(`${API_URL}/users/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error('Saved login is no longer valid.')
-    }
-
-    dashboardOpen.value = true
-  } catch {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-  }
+  dashboardOpen.value = Boolean(session)
 }
 
-function logout() {
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
+async function logout() {
+  const { error } = await supabase.auth.signOut()
+
+  if (error) {
+    setMessage(error.message)
+    return
+  }
 
   email.value = ''
   password.value = ''
