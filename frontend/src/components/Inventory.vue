@@ -140,7 +140,10 @@
               <td class="stock-number">{{ group.totalStock }}</td>
               <td class="stock-number">{{ group.totalSold }}</td>
               <td>
-                <em :class="group.hasLowStock ? 'low' : 'in-stock'">
+                <em
+                  v-if="!group.hasVariants"
+                  :class="group.hasLowStock ? 'low' : 'in-stock'"
+                >
                   {{ group.hasLowStock ? 'Low Stock' : 'In Stock' }}
                 </em>
               </td>
@@ -232,6 +235,7 @@ import { supabase } from '@/lib/supabaseClient'
 type ProductRow = {
   id: string
   name: string
+  product_type: string
   category: string
   size: string
   description: string
@@ -245,6 +249,7 @@ type ProductRow = {
 type SupabaseProduct = {
   id: string
   name: string
+  product_type: string | null
   category: string | null
   size: string | null
   description: string | null
@@ -312,17 +317,19 @@ const groupedInventory = computed(() => {
   const groups = new Map<string, ProductRow[]>()
 
   for (const item of inventory.value) {
-    const normalizedName = normalizeText(item.name)
-    const items = groups.get(normalizedName) || []
+    const key = normalizeText(item.product_type)
+    const items = groups.get(key) || []
     items.push(item)
-    groups.set(normalizedName, items)
+    groups.set(key, items)
   }
 
   return Array.from(groups.entries()).map(([key, items]) => ({
     key,
-    name: items[0].name,
+    name: items[0].product_type,
     image: items.find((item) => item.image)?.image || null,
-    items: [...items].sort((a, b) => `${a.category} ${a.size}`.localeCompare(`${b.category} ${b.size}`)),
+    items: [...items].sort((a, b) =>
+      `${a.category} ${a.size}`.localeCompare(`${b.category} ${b.size}`),
+    ),
     hasVariants: items.length > 1,
     totalStock: items.reduce((sum, item) => sum + item.stock, 0),
     totalSold: items.reduce((sum, item) => sum + item.sold, 0),
@@ -418,6 +425,7 @@ function mapProduct(row: SupabaseProduct): ProductRow {
   return {
     id: row.id,
     name: row.name,
+    product_type: row.product_type || row.name, // fallback if empty
     category: row.category || '',
     size: row.size || '',
     description: row.description || '',
@@ -435,7 +443,7 @@ async function loadInventory() {
   try {
     const { data, error } = await supabase
       .from('products')
-      .select('id, name, category, size, description, price, stock, sold, image, is_bestseller')
+      .select('id, name, product_type, category, size, description, price, stock, sold, image, is_bestseller')
       .order('name')
 
     if (error) throw error
