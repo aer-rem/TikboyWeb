@@ -213,6 +213,18 @@
             <img :src="imagePreviewUrl" alt="Selected product preview" />
           </div>
 
+          <v-btn
+            v-if="editForm.image || imagePreviewUrl"
+            class="remove-image-button"
+            color="error"
+            variant="outlined"
+            :disabled="saving"
+            @click="removeProductImage(getCurrentEditProduct()!)"
+          >
+            <v-icon icon="mdi-trash-can-outline" start />
+            Remove Image
+          </v-btn>          
+
           <v-text-field v-model="editForm.category" label="Category" placeholder="Example: Regular, Spicy, Sweet" variant="outlined" :disabled="saving" />
           <v-text-field v-model="editForm.size" label="Size" placeholder="Example: Big or Small" variant="outlined" :disabled="saving" />
           <v-textarea v-model="editForm.description" label="Description" placeholder="Describe the product" variant="outlined" rows="3" :disabled="saving" />
@@ -354,6 +366,10 @@ const stats = computed(() => {
     },
   ]
 })
+
+function getProductImagePath(productId: string) {
+  return `${productId}/product`
+}
 
 function normalizeText(value: string | null | undefined) {
   return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
@@ -675,6 +691,55 @@ async function uploadProductImage(file: File, productId: string) {
 
   if (error) throw error
   return `${supabase.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl}?v=${Date.now()}`
+}
+
+function getCurrentEditProduct() {
+  return inventory.value.find(
+    (product) => product.id === editForm.value.id,
+  )
+}
+
+async function removeProductImage(item: ProductRow) {
+  if (!confirm('Remove this product image?')) return
+
+  saving.value = true
+
+  try {
+    // Find files inside this product's storage folder.
+    const { data: files, error: listError } = await supabase.storage
+      .from(IMAGE_BUCKET)
+      .list(item.id)
+
+    if (listError) throw listError
+
+    const paths = (files || [])
+      .filter((file) => file.name)
+      .map((file) => `${item.id}/${file.name}`)
+
+    if (paths.length) {
+      const { error: removeError } = await supabase.storage
+        .from(IMAGE_BUCKET)
+        .remove(paths)
+
+      if (removeError) throw removeError
+    }
+
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ image: null })
+      .eq('id', item.id)
+
+    if (updateError) throw updateError
+
+    await loadInventory()
+    closeEdit()
+    emit('notice', 'Product image removed.')
+  } catch (error: unknown) {
+    console.error('Remove image failed:', error)
+    emit('notice', error instanceof Error ? error.message : 'Could not remove the product image.')
+  } finally {
+    saving.value = false
+  }
 }
 
 function openEdit(item: ProductRow) {
@@ -1081,6 +1146,11 @@ em {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.remove-image-button {
+  margin-top: -8px;
+  margin-bottom: 20px;
 }
 
 @media (max-width: 960px) {
